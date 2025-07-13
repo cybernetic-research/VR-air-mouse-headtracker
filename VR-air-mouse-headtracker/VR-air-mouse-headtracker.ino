@@ -40,9 +40,13 @@
  
 #include <Wire.h>
 #include "esp32-hal-timer.h"
-#include <BLEMouse.h>
 
-BleMouse bleMouse("VR HeadMouse", "CyberneticResearch", 100); // Battery level in %
+
+#if USE_BLE_MOUSE
+  #include <BLEMouse.h>
+  BleMouse bleMouse("VR HeadMouse", "CyberneticResearch", 100); // Battery level in %
+#endif
+
 float eInt[3];
 float Ki=1.0f;
 float Kp = 1.0f;
@@ -301,7 +305,11 @@ void setup()
   Serial.printf("IMU setup complete\n");
   delay(1000);
   Serial.printf("Initilaise BLE Mouse\n");
-  bleMouse.begin(); 
+#if USE_BLE_MOUSE
+  Serial.printf("Free heap before BLE init: %d\n", ESP.getFreeHeap()); 
+  bleMouse.begin();
+  Serial.printf("Free heap after BLE init: %d\n", ESP.getFreeHeap());
+#endif
   Serial.printf("BLE Mouse initialise complete\n");
 }
 
@@ -314,7 +322,7 @@ void loop() {
     tLast = tNow;
 
     IMULoop(); // Updates pitch/roll
-
+#if USE_BLE_MOUSE
     if (bleMouse.isConnected()) 
     {
       if(_update)
@@ -329,6 +337,7 @@ void loop() {
         }
       }
     }
+#endif
   }
 }
 
