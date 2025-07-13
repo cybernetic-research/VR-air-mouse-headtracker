@@ -1,3 +1,11 @@
+#include <BleConnectionStatus.h>
+#include <BleMouse.h>
+
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
+
 //H/W esp32 wroom da
 
 
@@ -32,7 +40,9 @@
  
 #include <Wire.h>
 #include "esp32-hal-timer.h"
+#include <BLEMouse.h>
 
+BleMouse bleMouse("VR HeadMouse", "CyberneticResearch", 100); // Battery level in %
 float eInt[3];
 float Ki=1.0f;
 float Kp = 1.0f;
@@ -247,76 +257,8 @@ bool _error = false;
   #error This code is intended to run only on the ESP32 boards ! Please check your Tools->Board setting.
 #endif
 
-#define _WEBSOCKETS_LOGLEVEL_     3
-
 
 bool _connected = false;
-
-
-const char*   ssid      = "LIFTER";
-const char*   password  = "ionocraft";
-char message[1024];
-//const char*   ID        = "LIFTER_SERVER";        //Access point hub provides network for entire system
-//const char*   ID        = "INVERTER_PITCH";       //pitch axis pair for pitch axes
-//const char*   ID        = "INVERTER_ROLL";        //roll axis pair for roll axes
-const char*   ID        = "SENSOR_ORIENTATION";   //orientation sensor
-//const char*   ID        = "CONTROLLER";           //web browser to view and control system
-
-/*
- *  Suggested Message format
- *  
- *  destination: ID code above, or ALL for broadcast
- *     
- *  controller demand to update axis pairs 
- *  
- *  {
- *    sender: CONTROLLER;
- *    destination: INVERTER_PITCH; 
- *    msg: UPDATE;
- *    payload:{
- *     AXIS0: 0;
- *     AXIS1: 255;
- *    }
- *  }
- * 
- * 
- *  status update from inverter
- * 
- *  {
- *    sender: INVERTER_PITCH;
- *    destination: CONTROLLER; 
- *    msg: STATUS;
- *    payload:{
- *     ADC0:  0;
- *     ADC1:  255;
- *    }
- *  }
- *  
- *  
- *  status update from sensor pack
- * 
- *  {
- *    sender: SENSOR_ORIENTATION;
- *    destination: ALL; 
- *    msg: STATUS;
- *    payload:{
- *     HEADING: 180;
- *     PITCH: 45;
- *     ROLL: -45;
- *    }
- *  }
- *  
- *  
- */
-
-
-
-
-
-
-
-
-
 
 
 void hexdump(const void *mem, uint32_t len, uint8_t cols = 16)
@@ -339,40 +281,11 @@ void hexdump(const void *mem, uint32_t len, uint8_t cols = 16)
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-volatile int interruptCounter;
-int totalInterruptCounter;
- 
-hw_timer_t * timer = NULL;
-portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
- 
-void IRAM_ATTR onTimer() {
-  portENTER_CRITICAL_ISR(&timerMux);
-  interruptCounter++;
-  portEXIT_CRITICAL_ISR(&timerMux);  
-}
-
-
-
-
-
 void setup()
 {
   Serial.begin(115200);
 
-  Serial.println("\nStart ESP32_WebSocketClient");
+  Serial.println("\nStart Head Tracker");
 
   //Serial.setDebugOutput(true);
   Serial.setDebugOutput(true);
@@ -384,95 +297,40 @@ void setup()
     delay(1000);
   }
 
-  IMUSetup();
-
-
-  timer = timerBegin(1000);  // New API: frequency only
-  timerAttachInterrupt(timer, &onTimer);  // No edge argument
-  timerAlarm(timer, 1000, true, 0);  // 1000 µs = 1ms
- 
+  IMUSetup(); 
+  Serial.printf("IMU setup complete\n");
+  delay(1000);
+  Serial.printf("Initilaise BLE Mouse\n");
+  bleMouse.begin(); 
+  Serial.printf("BLE Mouse initialise complete\n");
 }
 
+uint32_t tLast = 0;
+#define  TIME_BETWEEN_UPDATES 10
 
+void loop() {
+  uint32_t tNow = millis();
+  if (tNow - tLast >= TIME_BETWEEN_UPDATES) {
+    tLast = tNow;
 
+    IMULoop(); // Updates pitch/roll
 
-
-
-int ctr1=0;
-void loop()
-{
- 
-  if (interruptCounter > 0) {
- 
-    portENTER_CRITICAL(&timerMux);
-    interruptCounter--;
-    portEXIT_CRITICAL(&timerMux);
- 
-    totalInterruptCounter++;
-    ctr1+=1;
-    if(ctr1>99)
+    if (bleMouse.isConnected()) 
     {
-      
-      ctr1 = 0;
-    }
-  }
-  bool webloop=false;
-  switch(ctr1)
-  {
-    default:break;
-    case 0:
-    case 10:
-    case 20:
-    case 30:
-    case 40:
-    case 50:
-    case 60:
-    case 70:
-    case 80:
-    case 90:
-    {
-     
-    }
-    break;
-    case 5:
-    case 15:
-    case 25:
-    case 35:
-    case 45:
-    case 55:
-    case 65:
-    case 75:
-    case 85:
-    case 95:
-    {
-    }
-    break;
-
-    case 7:
-    case 27:
-    case 57:
-    case 77:
-    {
-      
-      if(_update){
+      if(_update)
+      {
         _update = false;
+        const float sensitivity = 1.5;
+        int8_t dx = (int8_t)(roll * sensitivity);
+        int8_t dy = (int8_t)(pitch * sensitivity);
+        if (abs(dx) > 1 || abs(dy) > 1) 
+        {
+          bleMouse.move(dx, dy);
+        }
       }
-      
     }
-    break;
-  }
-  if(!webloop)
-  {
-    IMULoop();
   }
 }
-
-
-
-
-
-
-
 
 
 void IMUSetup()
