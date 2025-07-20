@@ -12,49 +12,75 @@
 Adafruit_BNO055 bno = Adafruit_BNO055(55,0x29);
 float lastYaw = 0;
 float lastPitch = 0;
-
-const uint8_t hidReportDescriptor[] = {
-  0x05, 0x01,       // Usage Page (Generic Desktop)
-  0x09, 0x02,       // Usage (Mouse)
-  0xA1, 0x01,       // Collection (Application)
-    0x85, 0x01,     // Report ID (1)
-    0x09, 0x01,     // Usage (Pointer)
-    0xA1, 0x00,     // Collection (Physical)
-      0x05, 0x09,   // Usage Page (Buttons)
-      0x19, 0x01,
-      0x29, 0x03,
-      0x15, 0x00,
-      0x25, 0x01,
-      0x95, 0x03,
-      0x75, 0x01,
-      0x81, 0x02,   // Button inputs
-      0x95, 0x01,
-      0x75, 0x05,
-      0x81, 0x03,   // Padding
-      0x05, 0x01,
-      0x09, 0x30,
-      0x09, 0x31,
-      0x15, 0x81,
-      0x25, 0x7F,
-      0x75, 0x08,
-      0x95, 0x02,
-      0x81, 0x06,   // X/Y as relative movement
-    0xC0,
-  0xC0
+#define MOUSE_REPORT_ID 1
+/*
+uint8_t const hidReportDescriptor[] = {
+  HID_USAGE_PAGE(HID_USAGE_PAGE_DESKTOP),
+  HID_USAGE(HID_USAGE_DESKTOP_MOUSE),
+  HID_COLLECTION(HID_COLLECTION_APPLICATION),
+  HID_REPORT_ID(1)
+  HID_USAGE(HID_USAGE_DESKTOP_POINTER),
+  HID_COLLECTION(HID_COLLECTION_PHYSICAL),
+  HID_USAGE_PAGE(HID_USAGE_PAGE_BUTTON),
+  HID_USAGE_MIN(1),
+  HID_USAGE_MAX(3),
+  HID_LOGICAL_MIN(0),
+  HID_LOGICAL_MAX(1),
+  // buttons 
+  HID_REPORT_COUNT(3),
+  HID_REPORT_SIZE(1),
+  HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE),
+  // padding 
+  HID_REPORT_COUNT(1),
+  HID_REPORT_SIZE(5),
+  HID_INPUT(HID_CONSTANT),
+  HID_USAGE_PAGE(HID_USAGE_PAGE_DESKTOP),
+  // X, Y position [0, 32767] 
+  HID_USAGE(HID_USAGE_DESKTOP_X),
+  HID_USAGE(HID_USAGE_DESKTOP_Y),
+  HID_LOGICAL_MIN_N(0x0000, 2),
+  HID_LOGICAL_MAX_N(0x7fff, 2),
+  HID_REPORT_COUNT(2),
+  HID_REPORT_SIZE(16),
+  HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE),
+  HID_COLLECTION_END,
+  HID_COLLECTION_END
 };
+*/
 
 
 NimBLEHIDDevice* hid;
 NimBLECharacteristic* inputMouse;
-
+bool connected = false;
 class MyServerCallbacks : public NimBLEServerCallbacks {
-  void onConnect(NimBLEServer* pServer) {
-    Serial.println("Connected");
+  void onConnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) {
+    Serial.println("BLE HID connected");
+    connected = true;
   }
+
   void onDisconnect(NimBLEServer* pServer) {
-    Serial.println("Disconnected — restarting advertising");
+    Serial.println("BLE HID disconnected");
+    connected = false;
     NimBLEDevice::getAdvertising()->start();
   }
+};
+
+const uint8_t hidReportDescriptor[] = {
+  0x05, 0x01, // Usage Page (Generic Desktop)
+  0x09, 0x02, // Usage (Mouse)
+  0xA1, 0x01, // Collection (Application)
+    0x09, 0x01, // Usage (Pointer)
+    0xA1, 0x00, // Collection (Physical)
+      0x05, 0x01,
+      0x09, 0x30, // Usage X
+      0x09, 0x31, // Usage Y
+      0x15, 0x81, // Logical Min -127
+      0x25, 0x7F, // Logical Max 127
+      0x75, 0x08, // Report size: 8 bits
+      0x95, 0x02, // Report count: 2
+      0x81, 0x06, // Input (Data, Variable, Relative)
+    0xC0,
+  0xC0
 };
 
 void setupMouseHID() {
@@ -70,13 +96,11 @@ void setupMouseHID() {
   hid->setPnp(0x02, 0xE502, 0xA111, 0x0210); // PnP info
   NimBLEDevice::setSecurityAuth(false, false, false); // Enable bonding
   
-  inputMouse = hid->getInputReport(1); // Report ID 0
+  inputMouse = hid->getInputReport(0); // Report ID 0
   hid->startServices();
-
+  sendRelativeMouse(0,0);
   delay(50);
-  int8_t mouseData[4] = {1, 0, 0, 0};
-  inputMouse->setValue((uint8_t*)mouseData, sizeof(mouseData));
-  inputMouse->notify();
+
 
   NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
   pAdvertising->setAppearance(HID_MOUSE);
@@ -103,21 +127,35 @@ void setup(void)
   setupMouseHID();
 }
 
+void CheckConnectionstatus()
+{
+  static bool lastConnected = false;
+ 
+  
+  if (connected != lastConnected) {
+    lastConnected = connected;
+    Serial.printf("BLE conenction %d\n",connected);
+  }
+}
+
 void loop(void) 
 {
   /* Get a new sensor event */ 
   sensors_event_t event; 
   bno.getEvent(&event);
+  CheckConnectionstatus();
   UpdateMouse(&event);
   /* Display the floating point data */
-  Serial.print("X: ");
-  Serial.print(event.orientation.x, 4);
-  Serial.print("\tY: ");
-  Serial.print(event.orientation.y, 4);
-  Serial.print("\tZ: ");
-  Serial.print(event.orientation.z, 4);
-  Serial.println("");
   delay(50);
+}
+
+void sendRelativeMouse(int8_t dx, int8_t dy) {
+  int8_t mouseData[2] = {moveX, moveY};
+  inputMouse->setValue(reinterpret_cast<const uint8_t*>(mouseData), sizeof(mouseData));
+  bool notifySuccess = inputMouse->notify();
+if (!notifySuccess) {
+  Serial.println("Report notification failed — host may not be subscribed");
+}
 }
 
 void UpdateMouse(sensors_event_t *event)
@@ -132,8 +170,8 @@ void UpdateMouse(sensors_event_t *event)
   int moveY = int(dy * sensitivity);
   int8_t mouseData[4] = {1, 0, moveX, moveY};
     if (abs(moveX) > 1 || abs(moveY) > 1) {
-    inputMouse->setValue((uint8_t*)mouseData, sizeof(mouseData));
-    inputMouse->notify();
+      sendRelativeMouse(moveX,moveY);
+    Serial.printf("connected: %d Mouse Report: X=%d Y=%d\n", connected, moveX, moveY);
   }
   // Update previous values
   lastYaw = yaw;
