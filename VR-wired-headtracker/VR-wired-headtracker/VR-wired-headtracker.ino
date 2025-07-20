@@ -7,6 +7,7 @@
 Adafruit_BNO055 bno = Adafruit_BNO055(55,0x29);
 float lastYaw = 0;
 float lastPitch = 0;
+int enableMotion = 0;
 #define USE_IMU 1
 
 void InitIMU()
@@ -35,6 +36,7 @@ void setup() {
   Serial.print("test0");
   Serial1.print("test1");
   InitIMU();
+  pinMode(A3, INPUT_PULLUP); // Enables internal pull-up
 }
 
 int sensitivity  = 20;
@@ -58,7 +60,11 @@ void HandleGPS()
       Serial.print("$IMU,");
       Serial.print(lastYaw);
       Serial.print(",");
-      Serial.println(lastPitch);
+      Serial.print(lastPitch),
+      Serial.print(",");
+      Serial.print(enableMotion);
+      Serial.print(",");
+      Serial.println(sensitivity);
       gpsIndex = 0;               // Reset buffer
     }
   }
@@ -123,13 +129,17 @@ float unwrap(float current, float last) {
 
 void UpdateMouse(sensors_event_t *event)
 {
+  enableMotion = digitalRead(A3); // HIGH or LOW
   float pitch = event->orientation.y; // Using roll instead
   float yaw = event->orientation.x;   // Treat pitch as yaw, for rotated board
   float dx = unwrap(yaw, lastYaw);
   float dy = unwrap(pitch, lastPitch);  
   int x = int(dx * sensitivity);
   int y = int(dy * sensitivity);
-  Mouse.move(x, y);
+  if (enableMotion == HIGH) 
+  {
+    Mouse.move(x, y);
+  }
   // Update previous values
   lastYaw = yaw;
   lastPitch = pitch;
