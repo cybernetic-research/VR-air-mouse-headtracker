@@ -28,7 +28,7 @@ uint8_t const hidReportDescriptor[] = {
   HID_LOGICAL_MAX(1),
   // buttons 
   HID_REPORT_COUNT(3),
-  HID_REPORT_SIZE(1),
+  HID_REPORT_SIZE(1),AXIS_SIGN_NEG, AXIS_
   HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE),
   // padding 
   HID_REPORT_COUNT(1),

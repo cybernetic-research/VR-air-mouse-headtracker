@@ -21,6 +21,9 @@ void InitIMU()
       Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
       while(1);
     }
+    else
+    {
+    }
     delay(3000);   
     bno.setExtCrystalUse(true);
   }
@@ -51,6 +54,10 @@ void HandleGPS()
     if (c == '\n') {
       gpsBuffer[gpsIndex] = '\0'; // Null-terminate
       Serial.print(gpsBuffer);    // Dump full GPS line
+      Serial.print("$IMU,");
+      Serial.print(lastYaw);
+      Serial.print(",");
+      Serial.println(lastPitch);
       gpsIndex = 0;               // Reset buffer
     }
   }
@@ -74,19 +81,24 @@ void loop() {
   delay(10);
 }
 
+
+float unwrap(float current, float last) {
+  float delta = current - last;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+  return delta;
+}
+
 void UpdateMouse(sensors_event_t *event)
 {
-  float yaw = event->orientation.z;
-  float pitch = event->orientation.y;
-  float dx = yaw - lastYaw;
-  float dy = pitch - lastPitch;
-  // Optional sensitivity scaling
-  int sensitivity = 2;
+  float pitch = event->orientation.y; // Using roll instead
+  float yaw = event->orientation.x;   // Treat pitch as yaw, for rotated board
+  float dx = unwrap(yaw, lastYaw);
+  float dy = unwrap(pitch, lastPitch);  
+  int sensitivity = 20; // Try 5–10 for starters
   int x = int(dx * sensitivity);
   int y = int(dy * sensitivity);
-    if (abs(x) > 1 || abs(y) > 1) {
-      Mouse.move(x, y); 
-  }
+  Mouse.move(x, y);
   // Update previous values
   lastYaw = yaw;
   lastPitch = pitch;
