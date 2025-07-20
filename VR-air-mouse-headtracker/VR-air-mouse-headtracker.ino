@@ -66,23 +66,21 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 };
 
 const uint8_t hidReportDescriptor[] = {
-  0x05, 0x01, // Usage Page (Generic Desktop)
-  0x09, 0x02, // Usage (Mouse)
-  0xA1, 0x01, // Collection (Application)
-    0x09, 0x01, // Usage (Pointer)
-    0xA1, 0x00, // Collection (Physical)
-      0x05, 0x01,
-      0x09, 0x30, // Usage X
-      0x09, 0x31, // Usage Y
-      0x15, 0x81, // Logical Min -127
-      0x25, 0x7F, // Logical Max 127
-      0x75, 0x08, // Report size: 8 bits
-      0x95, 0x02, // Report count: 2
-      0x81, 0x06, // Input (Data, Variable, Relative)
+  0x05, 0x01,       // Usage Page (Generic Desktop)
+  0x09, 0x02,       // Usage (Mouse)
+  0xA1, 0x01,       // Collection (Application)
+    0x09, 0x01,     // Usage (Pointer)
+    0xA1, 0x00,     // Collection (Physical)
+      0x09, 0x30,   // Usage (X)
+      0x09, 0x31,   // Usage (Y)
+      0x15, 0x81,   // Logical Min (-127)
+      0x25, 0x7F,   // Logical Max (127)
+      0x75, 0x08,   // Report Size (8)
+      0x95, 0x02,   // Report Count (2)
+      0x81, 0x06,   // Input (Data, Variable, Relative)
     0xC0,
   0xC0
 };
-
 void setupMouseHID() {
   NimBLEDevice::init("VR HeadMouse");
   NimBLEServer* pServer = NimBLEDevice::createServer();
@@ -150,12 +148,9 @@ void loop(void)
 }
 
 void sendRelativeMouse(int8_t dx, int8_t dy) {
-  int8_t mouseData[2] = {moveX, moveY};
+  int8_t mouseData[2] = {dx, dy};
   inputMouse->setValue(reinterpret_cast<const uint8_t*>(mouseData), sizeof(mouseData));
-  bool notifySuccess = inputMouse->notify();
-if (!notifySuccess) {
-  Serial.println("Report notification failed — host may not be subscribed");
-}
+  inputMouse->notify();
 }
 
 void UpdateMouse(sensors_event_t *event)
@@ -168,7 +163,6 @@ void UpdateMouse(sensors_event_t *event)
   int sensitivity = 2;
   int moveX = int(dx * sensitivity);
   int moveY = int(dy * sensitivity);
-  int8_t mouseData[4] = {1, 0, moveX, moveY};
     if (abs(moveX) > 1 || abs(moveY) > 1) {
       sendRelativeMouse(moveX,moveY);
     Serial.printf("connected: %d Mouse Report: X=%d Y=%d\n", connected, moveX, moveY);
