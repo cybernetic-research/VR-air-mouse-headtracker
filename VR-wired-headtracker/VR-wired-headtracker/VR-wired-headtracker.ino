@@ -37,6 +37,7 @@ void setup() {
   InitIMU();
 }
 
+int sensitivity  = 20;
 
 #define GPS_BUFFER_SIZE 128
 char gpsBuffer[GPS_BUFFER_SIZE];
@@ -63,6 +64,36 @@ void HandleGPS()
   }
 }
 
+#define CMD_BUFFER_SIZE 32
+char cmdBuffer[CMD_BUFFER_SIZE];
+uint8_t cmdIndex = 0;
+void HandleSerialCommand() {
+  while (Serial.available()) {
+    char c = Serial.read();
+
+    if (cmdIndex < CMD_BUFFER_SIZE - 1) {
+      cmdBuffer[cmdIndex++] = c;
+    }
+
+    if (c == '\n') {
+      cmdBuffer[cmdIndex] = '\0';
+
+      if (strncmp(cmdBuffer, "sens=", 5) == 0) {
+        int newSens = atoi(&cmdBuffer[5]);
+        if (newSens > 0 && newSens < 100) {  // reasonable bounds
+          sensitivity = newSens;
+          Serial.print("Sensitivity set to: ");
+          Serial.println(sensitivity);
+        }
+      }
+
+      // You can add more commands like "center\n" here.
+
+      cmdIndex = 0; // Reset for next line
+    }
+  }
+}
+
 void HandleMouse()
 {
   if(USE_IMU)
@@ -75,11 +106,12 @@ void HandleMouse()
 }
 
 void loop() {
-  // put your main code here, to run repeatedly: 
-  HandleMouse();
-  HandleGPS();
+  HandleSerialCommand();  // Listen to USB host commands
+  HandleMouse();          // Move cursor based on IMU
+  HandleGPS();            // Stream GPS + IMU telemetry
   delay(10);
 }
+
 
 
 float unwrap(float current, float last) {
@@ -95,7 +127,6 @@ void UpdateMouse(sensors_event_t *event)
   float yaw = event->orientation.x;   // Treat pitch as yaw, for rotated board
   float dx = unwrap(yaw, lastYaw);
   float dy = unwrap(pitch, lastPitch);  
-  int sensitivity = 20; // Try 5–10 for starters
   int x = int(dx * sensitivity);
   int y = int(dy * sensitivity);
   Mouse.move(x, y);
